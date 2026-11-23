@@ -1,0 +1,26 @@
+---
+import SiteLayout from "../layouts/SiteLayout.astro";
+---
+<SiteLayout title="Acesso por convite — Silver RPG Master">
+  <main class="auth-page">
+    <a class="brand" href="/"><span class="brand-mark">S.</span><span>SILVER <span class="muted">/</span> RPG MASTER</span></a>
+    <section class="auth-panel">
+      <p class="eyebrow">Cadastro restrito</p>
+      <h1>Uma mesa<br />por convite.</h1>
+      <p class="muted description">O Silver RPG Master é uma aplicação privada. O cadastro será liberado por códigos de convite emitidos pelo administrador.</p>
+      <div class="notice" role="status">O fluxo de validação e resgate de convites está em implementação. Nenhum código será aceito até que a verificação no servidor e as permissões do banco estejam prontas.</div>
+      <a class="button button-primary submit" href="/entrar">Já tenho uma conta <span aria-hidden="true">→</span></a>
+      <a class="back-link" href="/">← Voltar ao início</a>
+    </section>
+  </main>
+</SiteLayout>
+<style>
+  .auth-page { min-height: 100vh; width: min(100% - 48px, 1120px); margin: auto; padding-block: 34px; }
+  .auth-panel { width: min(100%, 430px); margin: clamp(70px, 12vh, 130px) auto 60px; }
+  h1 { margin: 18px 0 12px; font: 700 43px/1.08 var(--display); letter-spacing: -.055em; }
+  .description { margin-bottom: 28px; font-size: 14px; line-height: 1.8; }
+  .notice { padding: 14px 15px; border-left: 2px solid var(--accent); background: #202721; color: #c6d2bf; font-size: 12px; line-height: 1.7; }
+  .submit { width: 100%; margin-top: 23px; }
+  .back-link { display: inline-block; margin-top: 30px; color: #8d9a8d; font-size: 12px; }
+  @media (max-width: 520px) { .auth-page { width: calc(100% - 36px); } .auth-panel { margin-top: 82px; } }
+</style>
