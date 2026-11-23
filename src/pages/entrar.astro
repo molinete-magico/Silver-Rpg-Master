@@ -2,6 +2,7 @@
 import SiteLayout from "../layouts/SiteLayout.astro";
 const motivo = Astro.url.searchParams.get("motivo");
 const erro = Astro.url.searchParams.get("erro");
+const cadastro = Astro.url.searchParams.get("cadastro");
 ---
 <SiteLayout title="Entrar — Silver RPG Master">
   <main class="auth-page">
@@ -12,6 +13,7 @@ const erro = Astro.url.searchParams.get("erro");
       <p class="muted description">Entre com sua conta para acessar suas salas.</p>
       {motivo === "configuracao" && <p class="notice" role="status">A autenticação ainda não foi configurada neste ambiente.</p>}
       {erro === "credenciais" && <p class="notice" role="alert">Não foi possível entrar com essas credenciais. Confira o e-mail e a senha.</p>}
+      {cadastro === "confirmar" && <p class="notice" role="status">Conta criada. Confira seu e-mail para confirmar o cadastro antes de entrar.</p>}
       <form action="/api/auth/login" method="POST">
         <label for="email">E-mail</label>
         <input id="email" name="email" type="email" autocomplete="email" required />

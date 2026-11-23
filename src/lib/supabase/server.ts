@@ -22,8 +22,8 @@ function parseCookieHeader(header: string) {
 }
 
 export function createSupabaseServerClient(request: Request, cookies: AstroCookies) {
-  const url = import.meta.env.SUPABASE_URL;
-  const key = import.meta.env.SUPABASE_PUBLISHABLE_KEY;
+  const url = import.meta.env.PUBLIC_SUPABASE_URL;
+  const key = import.meta.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
   if (!url || !key) {
     throw new Error("Supabase is not configured. Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.");

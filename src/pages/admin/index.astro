@@ -1,0 +1,73 @@
+---
+import SiteLayout from "../../layouts/SiteLayout.astro";
+const user = Astro.locals.user;
+if (!user || user.app_metadata.global_role !== "admin") return new Response("Acesso restrito.", { status: 403 });
+---
+<SiteLayout title="Administração — Silver RPG Master">
+  <main class="page">
+    <header class="header">
+      <a class="brand" href="/salas"><span class="brand-mark">S.</span><span>SILVER <span class="muted">/</span> RPG MASTER</span></a>
+      <a class="back" href="/salas">Voltar às salas</a>
+    </header>
+    <section class="content">
+      <p class="eyebrow">Administração global</p>
+      <h1>Convites<span>.</span></h1>
+      <p class="muted intro">Crie um código de uso único para permitir o cadastro de um novo participante. O código completo só será exibido uma vez.</p>
+      <form id="invite-form"><button class="button button-primary" type="submit">Gerar convite <span aria-hidden="true">→</span></button></form>
+      <div id="invite-result" class="result" hidden aria-live="polite"></div>
+      <p id="invite-error" class="error" hidden role="alert"></p>
+    </section>
+  </main>
+  <script>
+    const form = document.querySelector<HTMLFormElement>("#invite-form");
+    const result = document.querySelector<HTMLDivElement>("#invite-result");
+    const error = document.querySelector<HTMLParagraphElement>("#invite-error");
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!form || !result || !error) return;
+      const button = form.querySelector("button");
+      if (button) button.disabled = true;
+      error.hidden = true;
+      try {
+        const response = await fetch("/api/admin/invitations", { method: "POST" });
+        const payload = await response.json();
+        if (!response.ok || !payload.code) throw new Error(payload.error ?? "Falha ao gerar convite.");
+        result.hidden = false;
+        result.replaceChildren();
+        const label = document.createElement("p");
+        label.textContent = "Código criado. Copie e envie diretamente ao participante:";
+        const code = document.createElement("code");
+        code.textContent = payload.code;
+        const copy = document.createElement("button");
+        copy.type = "button";
+        copy.className = "button";
+        copy.textContent = "Copiar código";
+        copy.addEventListener("click", async () => {
+          await navigator.clipboard.writeText(payload.code);
+          copy.textContent = "Copiado";
+        });
+        result.append(label, code, copy);
+      } catch (cause) {
+        error.textContent = cause instanceof Error ? cause.message : "Falha ao gerar convite.";
+        error.hidden = false;
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+  </script>
+</SiteLayout>
+<style>
+  .page { min-height: 100vh; width: min(100% - 48px, 1120px); margin: auto; }
+  .header { height: 76px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+  .back { color: var(--muted); font-size: 12px; }
+  .content { width: min(100%, 620px); margin: 82px auto; }
+  h1 { margin: 14px 0 12px; font: 700 clamp(42px, 7vw, 64px)/1 var(--display); letter-spacing: -.06em; }
+  h1 span { color: var(--accent); }
+  .intro { max-width: 540px; font-size: 14px; line-height: 1.8; margin-bottom: 30px; }
+  .result { display: grid; gap: 13px; margin-top: 25px; padding: 20px; border: 1px solid var(--line); background: var(--surface); }
+  .result p { margin: 0; color: var(--muted); font-size: 13px; }
+  .result code { overflow-wrap: anywhere; padding: 13px; background: #101410; color: var(--accent-strong); font: 12px/1.7 var(--mono); }
+  .result button { justify-self: start; }
+  .error { margin-top: 20px; color: var(--danger); font-size: 13px; }
+  button:disabled { opacity: .55; cursor: wait; }
+</style>

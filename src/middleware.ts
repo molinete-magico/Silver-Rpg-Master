@@ -1,7 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { createSupabaseServerClient } from "./lib/supabase/server";
 
-const publicPaths = new Set(["/", "/entrar", "/convite", "/api/auth/login"]);
+const publicPaths = new Set(["/", "/entrar", "/convite", "/api/auth/login", "/api/auth/register"]);
 
 export const onRequest = defineMiddleware(async (context, next) => {
   context.locals.user = null;
