@@ -17,7 +17,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.redirect("/entrar?motivo=configuracao");
   }
 
-  const supabase = createSupabaseServerClient(context.cookies);
+  const supabase = createSupabaseServerClient(context.request, context.cookies);
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user) {

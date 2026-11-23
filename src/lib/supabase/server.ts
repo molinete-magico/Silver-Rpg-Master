@@ -3,7 +3,25 @@ import type { AstroCookies } from "astro";
 
 type CookieOptions = Parameters<AstroCookies["set"]>[2];
 
-export function createSupabaseServerClient(cookies: AstroCookies) {
+function parseCookieHeader(header: string) {
+  if (!header) return [];
+
+  return header.split(";").flatMap((part) => {
+    const separator = part.indexOf("=");
+    if (separator < 1) return [];
+
+    const rawName = part.slice(0, separator).trim();
+    const rawValue = part.slice(separator + 1).trim();
+
+    try {
+      return [{ name: decodeURIComponent(rawName), value: decodeURIComponent(rawValue) }];
+    } catch {
+      return [{ name: rawName, value: rawValue }];
+    }
+  });
+}
+
+export function createSupabaseServerClient(request: Request, cookies: AstroCookies) {
   const url = import.meta.env.SUPABASE_URL;
   const key = import.meta.env.SUPABASE_PUBLISHABLE_KEY;
 
@@ -14,7 +32,7 @@ export function createSupabaseServerClient(cookies: AstroCookies) {
   return createServerClient(url, key, {
     cookies: {
       getAll() {
-        return cookies.getAll().map(({ name, value }) => ({ name, value }));
+        return parseCookieHeader(request.headers.get("cookie") ?? "");
       },
       setAll(values) {
         values.forEach(({ name, value, options }) => {
