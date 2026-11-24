@@ -9,7 +9,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const displayName = String(form.get("display_name") ?? "").trim();
   const password = String(form.get("password") ?? "");
 
-  if (!/^[a-f0-9]{64}$/.test(code) || !email || !displayName || displayName.length > 48 || password.length < 12) {
+  if (!/^[a-f0-9]{64}$/.test(code) || !email || !displayName || displayName.length > 48 || password.length < 8) {
     return redirect("/convite?erro=invalid", 303);
   }
 
