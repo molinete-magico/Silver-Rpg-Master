@@ -40,6 +40,13 @@ as $$
     );
 $$;
 
+create or replace function private.can_view_character(target_character uuid) returns boolean
+language sql stable security definer set search_path = ''
+as $
+  select private.has_valid_access()
+    and exists (select 1 from public.characters c where c.id = target_character);
+$;
+
 create or replace function private.can_manage_character(target_character uuid) returns boolean
 language sql stable security definer set search_path = ''
 as $$
