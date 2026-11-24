@@ -135,6 +135,13 @@ export default function ScreenShare({ roomId, userId, role }: Props) {
     setBusy(false);
   }
 
+  async function stopLocalSharing() {
+    const room = roomRef.current;
+    if (room) await room.localParticipant.setScreenShareEnabled(false);
+    setSharing(false);
+    await connect(false);
+  }
+
   async function startSharing() {
     const approved = ownRequest?.status === "approved";
     if (role !== "gm" && !approved) return;
@@ -161,7 +168,8 @@ export default function ScreenShare({ roomId, userId, role }: Props) {
         ) : ownRequest?.status === "pending" ? <span className="screen-hint">Solicitação enviada. Aguardando o mestre.</span> : (
           <button type="button" className="button" onClick={() => void requestShare()} disabled={busy || Boolean(activeApproval)}>Solicitar compartilhamento</button>
         )}
-        {sharing && ownRequest && <button type="button" className="quiet-action" onClick={() => void stopRequest(ownRequest.id, true)} disabled={busy}>Parar de compartilhar</button>}
+        {sharing && role === "gm" && <button type="button" className="quiet-action" onClick={() => void stopLocalSharing()} disabled={busy}>Parar de compartilhar</button>}
+        {sharing && role === "player" && ownRequest && <button type="button" className="quiet-action" onClick={() => void stopRequest(ownRequest.id, true)} disabled={busy}>Parar de compartilhar</button>}
         {role === "gm" && activeApproval && <button type="button" className="quiet-action" onClick={() => void stopRequest(activeApproval.id, false)} disabled={busy}>Interromper compartilhamento ativo</button>}
       </div>
       {role === "gm" && <div className="share-requests">
