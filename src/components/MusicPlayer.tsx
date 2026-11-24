@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { createSupabaseBrowserClient } from "../lib/supabase/browser";
 
 type Track = {
@@ -167,7 +167,7 @@ export default function MusicPlayer({ roomId, userId, role }: Props) {
       youtubeTrackId.current = currentTrack.id;
       youtubePlayer.current = new window.YT.Player(youtubeHost.current, {
         videoId: currentTrack.youtube_video_id ?? "",
-        playerVars: { autoplay: 0, controls: 1, rel: 0, playsinline: 1, enablejsapi: 1 },
+        playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1, enablejsapi: 1 },
         events: {
           onReady: ({ target }) => {
             target.setVolume(Math.round(volume * 100));
@@ -230,7 +230,7 @@ export default function MusicPlayer({ roomId, userId, role }: Props) {
     setBusy(false);
   }
 
-  async function uploadAudio(event: React.ChangeEvent<HTMLInputElement>) {
+  async function uploadAudio(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || role !== "gm") return;
     if (!file.type.startsWith("audio/")) {
@@ -262,7 +262,7 @@ export default function MusicPlayer({ roomId, userId, role }: Props) {
     event.target.value = "";
   }
 
-  async function addYoutubeTrack(event: React.FormEvent<HTMLFormElement>) {
+  async function addYoutubeTrack(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (role !== "gm") return;
     const videoId = extractYoutubeId(youtubeUrl);
