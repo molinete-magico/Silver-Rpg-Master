@@ -18,4 +18,4 @@ site_url = "http://localhost:4321"
 additional_redirect_urls = ["http://localhost:4321/**"]
 jwt_expiry = 3600
 enable_signup = true
-password_min_length = 12
+password_min_length = 8
