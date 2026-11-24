@@ -1,4 +1,4 @@
-import { AccessToken } from "livekit-server-sdk";
+import { AccessToken, type VideoGrant } from "livekit-server-sdk";
 import type { APIRoute } from "astro";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 
@@ -34,13 +34,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   }
 
   const token = new AccessToken(apiKey, apiSecret, { identity: auth.user.id, ttl: "5m" });
+  const screenShareSources: NonNullable<VideoGrant["canPublishSources"]> = ["screen_share", "screen_share_audio"];
   token.addGrant({
     roomJoin: true,
     room: roomId,
     canSubscribe: true,
     canPublish: canPublish,
     canPublishData: false,
-    ...(canPublish ? { canPublishSources: ["screen_share", "screen_share_audio"] } : {}),
+    ...(canPublish ? { canPublishSources: screenShareSources } : {}),
   });
 
   return Response.json({ url: livekitUrl, token: await token.toJwt(), canPublish });
