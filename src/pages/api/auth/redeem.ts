@@ -15,7 +15,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 
     if (!current.user) {
       const { error: signInError } = await supabase.auth.signInAnonymously();
-      if (signInError) return redirect("/entrar?motivo=anonimo", 303);
+      if (signInError?.code === "anonymous_provider_disabled") {
+        return redirect("/entrar?motivo=anonimo", 303);
+      }
+      if (signInError) return redirect("/entrar?motivo=configuracao", 303);
     } else if (!current.user.is_anonymous) {
       return redirect("/entrar?erro=token", 303);
     }
