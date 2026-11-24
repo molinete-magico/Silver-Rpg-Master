@@ -1,0 +1,44 @@
+---
+import SiteLayout from "../layouts/SiteLayout.astro";
+const erro = Astro.url.searchParams.get("erro");
+---
+<SiteLayout title="Acesso por convite — Silver RPG Master">
+  <main class="auth-page">
+    <a class="brand" href="/"><span class="brand-mark">S.</span><span>SILVER <span class="muted">/</span> RPG MASTER</span></a>
+    <section class="auth-panel">
+      <p class="eyebrow">Cadastro restrito</p>
+      <h1>Uma mesa<br />por convite.</h1>
+      <p class="muted description">Use o código recebido para criar sua conta. Cada convite possui uso e validade definidos pelo administrador.</p>
+      {erro === "invalid" && <p class="notice" role="alert">Não foi possível validar o convite ou concluir o cadastro. Confira os dados e tente novamente.</p>}
+      <form action="/api/auth/register" method="POST">
+        <label for="code">Código de convite</label>
+        <input id="code" name="code" type="text" inputmode="text" autocomplete="off" minlength="64" maxlength="64" pattern="[a-fA-F0-9]{64}" required />
+        <label for="display_name">Como devemos chamar você?</label>
+        <input id="display_name" name="display_name" type="text" maxlength="48" autocomplete="nickname" required />
+        <label for="email">E-mail</label>
+        <input id="email" name="email" type="email" autocomplete="email" required />
+        <label for="password">Senha (mínimo de 8 caracteres)</label>
+        <input id="password" name="password" type="password" minlength="8" autocomplete="new-password" required />
+        <button class="button button-primary submit" type="submit">Criar conta <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="invite-copy">Já tem uma conta? <a href="/entrar">Entrar</a>.</p>
+      <a class="back-link" href="/">← Voltar ao início</a>
+    </section>
+  </main>
+</SiteLayout>
+<style>
+  .auth-page { min-height: 100vh; width: min(100% - 48px, 1120px); margin: auto; padding-block: 34px; }
+  .auth-panel { width: min(100%, 430px); margin: clamp(50px, 9vh, 100px) auto 60px; }
+  h1 { margin: 18px 0 12px; font: 700 43px/1.08 var(--display); letter-spacing: -.055em; }
+  .description { margin-bottom: 26px; font-size: 14px; line-height: 1.8; }
+  form { display: grid; gap: 10px; }
+  label { margin-top: 9px; color: #b7c0b6; font-size: 12px; font-weight: 600; }
+  input { width: 100%; height: 46px; border: 1px solid var(--line); border-radius: 0; background: #171d18; color: var(--text); padding: 0 13px; outline: none; }
+  input:focus { border-color: var(--accent); }
+  .submit { width: 100%; margin-top: 17px; }
+  .invite-copy { margin-top: 26px; color: var(--muted); font-size: 12px; }
+  .invite-copy a { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 3px; }
+  .back-link { display: inline-block; margin-top: 30px; color: #8d9a8d; font-size: 12px; }
+  .notice { padding: 11px 13px; border-left: 2px solid var(--danger); background: #2a211f; color: #e1b2a8; font-size: 12px; line-height: 1.5; }
+  @media (max-width: 520px) { .auth-page { width: calc(100% - 36px); } .auth-panel { margin-top: 62px; } }
+</style>
