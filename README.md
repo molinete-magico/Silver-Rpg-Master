@@ -1,16 +1,16 @@
 # Silver RPG Master
 
-Aplicação privada para apoiar sessões de RPG de mesa. Reúne o escudo do mestre, recursos dos personagens, trilha sonora sincronizada e compartilhamento de tela. A voz continua no Discord.
+Aplicação privada para apoiar sessões de RPG de mesa. Reúne sessões, personagens e barras de recursos compartilhados, trilha sonora sincronizada e compartilhamento de tela. A voz continua no Discord.
 
-> Estado: implementação ativa. O banco inicial está criado, mas autenticação, convites e recursos ainda precisam de validação com uma conta real antes de considerar a aplicação pronta para sessões.
+> Estado: primeira versão do acesso compartilhado implementada em branch de teste. O banco Supabase está configurado e o Preview Vercel foi gerado; a validação com participantes depende de habilitar Anonymous Sign-ins e configurar as credenciais privadas do LiveKit.
 
 ## Stack
 
 - Astro SSR + React + TypeScript
 - Supabase: PostgreSQL, Auth, RLS, Realtime e Storage
-- Vercel: hospedagem e previews
-- LiveKit: compartilhamento de tela (integração pendente)
-- YouTube IFrame Player API: incorporação de áudio/vídeo (integração pendente)
+- Vercel: hospedagem e Preview
+- LiveKit: compartilhamento de tela
+- YouTube IFrame Player API: integração de mídia
 
 ## Desenvolvimento local
 
@@ -22,7 +22,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Configure `PUBLIC_SUPABASE_URL` e `PUBLIC_SUPABASE_PUBLISHABLE_KEY` no arquivo `.env`. São valores publicáveis; não coloque chaves secretas em variáveis `PUBLIC_*`.
+Configure `PUBLIC_SUPABASE_URL` e `PUBLIC_SUPABASE_PUBLISHABLE_KEY` no arquivo `.env`. São valores publicáveis; nunca coloque chaves secretas em variáveis `PUBLIC_*`.
 
 Verificações:
 
@@ -34,37 +34,25 @@ npm run preview
 
 ## Supabase
 
-Projeto associado: `guohjxrqjcdrcafbehbe` (PostgreSQL 17, região us-east-2).
+Projeto conectado: `guohjxrqjcdrcafbehbe` (PostgreSQL 17, região us-east-2).
 
-1. Instale a Supabase CLI.
-2. Execute `supabase login`.
-3. Execute `supabase link --project-ref guohjxrqjcdrcafbehbe`.
-4. Confira `supabase migration list`.
-5. Para um ambiente novo, aplique as migrations com `supabase db push`.
+As migrations versionadas em `supabase/migrations` incluem o esquema inicial e o novo sistema de tokens compartilhados. As duas migrations de acesso compartilhado já foram aplicadas ao projeto Supabase conectado.
 
-As migrations versionadas em `supabase/migrations` correspondem às quatro migrations já aplicadas no projeto remoto.
+### Habilitar acesso anônimo
 
-### Primeiro administrador
+No Dashboard do Supabase, abra **Authentication → Sign In / Providers → Anonymous Sign-Ins** e habilite a opção. O app usa identidades anônimas do Supabase Auth para que os participantes não precisem de e-mail ou senha. O token global continua sendo a autorização real de acesso.
 
-O projeto não possui usuários ainda. A primeira conta global deve ser criada por um convite de bootstrap de uso único:
+### Modelo de acesso
 
-1. Gere localmente um segredo hexadecimal de 64 caracteres, por exemplo com `openssl rand -hex 32`.
-2. No SQL Editor do Supabase, insira somente o hash do segredo:
+1. O administrador entra com sua conta permanente e abre `/admin`.
+2. Gera um token compartilhado e reutilizável; o código é exibido uma única vez.
+3. Os participantes inserem o código em `/entrar`.
+4. O servidor cria uma identidade anônima e vincula essa sessão ao hash do token.
+5. Tokens revogados deixam de autorizar imediatamente as sessões vinculadas.
+6. Todos os participantes autorizados veem e podem editar a biblioteca global de personagens.
+7. Qualquer participante autorizado pode entrar em uma sessão aberta. Apenas o papel global `admin` ou `master` pode abrir sessões; o criador é Mestre daquela sessão.
 
-```sql
-insert into public.invitations (code_hash, grant_global_admin, max_uses)
-values (
-  encode(extensions.digest(convert_to('COLE_AQUI_O_CODIGO_HEXADECIMAL', 'UTF8'), 'sha256'), 'hex'),
-  true,
-  1
-);
-```
-
-3. Acesse `/convite` na aplicação e faça o cadastro com esse código.
-4. O trigger valida e consome o convite atomicamente, cria o perfil e atribui `global_role=admin` em `app_metadata`.
-5. Depois de entrar, use `/admin` para emitir convites comuns. A interface nunca exibe o hash armazenado.
-
-Não compartilhe o código de bootstrap. Ele só pode ser usado uma vez.
+Os tokens são armazenados somente como hashes SHA-256. A chave publishable é a única chave Supabase utilizada no navegador; nenhuma service-role key é necessária para o fluxo de jogadores.
 
 ## Variáveis de ambiente
 
@@ -72,36 +60,27 @@ Não compartilhe o código de bootstrap. Ele só pode ser usado uma vez.
 | --- | --- |
 | `PUBLIC_SUPABASE_URL` | URL pública do projeto Supabase |
 | `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Chave publishable do Supabase |
-| `SUPABASE_SECRET_KEY` | Reservada para operações server-side privilegiadas; não usada pelo cliente |
 | `LIVEKIT_URL` | URL do servidor LiveKit |
 | `LIVEKIT_API_KEY` | Chave LiveKit, somente servidor |
 | `LIVEKIT_API_SECRET` | Segredo LiveKit, somente servidor |
-| `APP_URL` | Origem pública da aplicação |
+| `APP_URL` | Origem pública, opcional |
+
+As variáveis públicas do Supabase já estão configuradas no Vercel. As três variáveis LiveKit ainda precisam ser adicionadas para habilitar compartilhamento de tela.
 
 ## Vercel
 
-O projeto ainda precisa ser criado/conectado à equipe Vercel autorizada. Configure as variáveis acima no ambiente apropriado e defina a raiz do projeto como a raiz do repositório. O deploy de produção deve aguardar validação do preview.
+- Projeto: `silver-rpg-master`
+- Produção continua ligada à branch `main`.
+- Preview de teste é criado a partir de `feat/shared-access-tokens`.
+- A proteção SSO do Vercel foi desativada para permitir que convidados acessem o Preview; a aplicação protege as páginas e dados com tokens compartilhados.
+- Não mesclar a branch de teste até validar a entrada, a revogação, as sessões e os personagens.
 
-## Arquitetura e segurança
+## Segurança
 
-- Consulte [docs/architecture.md](docs/architecture.md) e [docs/security.md](docs/security.md).
-- Todas as tabelas do schema `public` têm RLS habilitado.
-- A autorização global usa somente `app_metadata.global_role`; `user_metadata` não é usado para privilégios.
-- Convites armazenam hashes SHA-256 e são consumidos com atualização atômica.
-- A chave publishable pode estar no navegador; chaves secretas não.
-- A pasta de músicas usa bucket privado e políticas de acesso por usuário/sala.
+Consulte [docs/architecture.md](docs/architecture.md) e [docs/security.md](docs/security.md).
 
-## Estado atual
-
-- [x] Base Astro/React/TypeScript e CI
-- [x] Esquema inicial Supabase e RLS
-- [x] Gate de cadastro por convite no trigger de Auth
-- [x] Salas, membros, personagens e barras no banco
-- [x] Realtime habilitado para recursos e estado da sala
-- [x] Bucket privado para áudio
-- [x] Telas e endpoints iniciais de cadastro, salas e barras
-- [ ] Bootstrap do primeiro administrador
-- [ ] Teste de autenticação com conta real
-- [ ] Player musical completo
-- [ ] Compartilhamento LiveKit
-- [ ] Preview Vercel e validação E2E
+- Todas as 15 tabelas do schema `public` têm RLS habilitado.
+- A autorização administrativa usa exclusivamente `app_metadata.global_role`.
+- Tokens são reutilizáveis, revogáveis e armazenados como hashes.
+- A validação ocorre no middleware e novamente nas políticas RLS.
+- Operações privilegiadas ficam no schema privado `private`.

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { createSupabaseBrowserClient } from "../lib/supabase/browser";
 
 type Bar = { id: string; name: string; current_value: number | string; max_value: number | string; sort_order: number; updated_at: string };
-type Character = { id: string; name: string; owner_id: string; resource_bars: Bar[] | null };
+type Character = { id: string; name: string; owner_id: string; updated_at: string; resource_bars: Bar[] | null };
 type Props = { roomId: string; userId: string; role: "gm" | "player" };
 
 export default function ResourceBoard({ roomId, userId, role }: Props) {
@@ -13,56 +13,61 @@ export default function ResourceBoard({ roomId, userId, role }: Props) {
   const [characterName, setCharacterName] = useState("");
   const [barDrafts, setBarDrafts] = useState<Record<string, { name: string; max: string }>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  void role;
 
   const load = useCallback(async () => {
     const { data, error: queryError } = await supabase
-      .from("room_characters")
-      .select("characters(id, name, owner_id, resource_bars(id, name, current_value, max_value, sort_order, updated_at))")
-      .eq("room_id", roomId);
+      .from("characters")
+      .select("id, name, owner_id, updated_at, resource_bars(id, name, current_value, max_value, sort_order, updated_at)")
+      .order("created_at", { ascending: false });
     if (queryError) {
-      setError("Não foi possível carregar os recursos desta sala.");
+      setError("Não foi possível carregar os personagens compartilhados.");
       setLoading(false);
       return;
     }
-    const rows = (data ?? []) as unknown as Array<{ characters: Character | null }>;
-    setCharacters(rows.flatMap((row) => row.characters ? [row.characters] : []));
+    setCharacters((data ?? []) as Character[]);
     setError("");
     setLoading(false);
-  }, [roomId, supabase]);
+  }, [supabase]);
 
   useEffect(() => {
     void load();
     const channel = supabase
-      .channel("resources-" + roomId)
+      .channel("shared-characters")
       .on("postgres_changes", { event: "*", schema: "public", table: "resource_bars" }, () => void load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "room_characters" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "characters" }, () => void load())
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [load, roomId, supabase]);
+  }, [load, supabase]);
 
   async function addCharacter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = characterName.trim();
     if (!name || name.length > 80) return;
     setBusy("character");
-    const { data, error: insertError } = await supabase.from("characters")
-      .insert({ owner_id: userId, name }).select("id").single();
-    if (insertError || !data) {
-      setError("Não foi possível criar o personagem.");
-      setBusy(null);
-      return;
-    }
-    const { error: linkError } = await supabase.from("room_characters").insert({
-      room_id: roomId, character_id: data.id, added_by: userId,
-    });
-    if (linkError) {
-      await supabase.from("characters").delete().eq("id", data.id);
-      setError("Não foi possível vincular o personagem à sala.");
-    } else {
-      setCharacterName("");
-      await load();
-    }
+    const { error: insertError } = await supabase.from("characters").insert({ owner_id: userId, name });
+    if (insertError) setError("Não foi possível criar o personagem.");
+    else { setCharacterName(""); await load(); }
+    setBusy(null);
+  }
+
+  async function renameCharacter(character: Character, name: string) {
+    const cleanName = name.trim();
+    if (!cleanName || cleanName.length > 80 || cleanName === character.name) return;
+    setBusy(character.id);
+    const { error: updateError } = await supabase.from("characters").update({ name: cleanName })
+      .eq("id", character.id).eq("updated_at", character.updated_at);
+    if (updateError) setError("Não foi possível atualizar o personagem. Os dados podem ter mudado em outro dispositivo.");
+    await load();
+    setBusy(null);
+  }
+
+  async function deleteCharacter(character: Character) {
+    if (!confirm(`Excluir o personagem “${character.name}” e todas as suas barras?`)) return;
+    setBusy(character.id);
+    const { error: deleteError } = await supabase.from("characters").delete().eq("id", character.id);
+    if (deleteError) setError("Não foi possível excluir o personagem.");
+    await load();
     setBusy(null);
   }
 
@@ -78,7 +83,7 @@ export default function ResourceBoard({ roomId, userId, role }: Props) {
     const { error: insertError } = await supabase.from("resource_bars").insert({
       character_id: characterId, name, current_value: max, max_value: max,
     });
-    if (insertError) setError("Você não tem permissão para criar essa barra ou os valores são inválidos.");
+    if (insertError) setError("Não foi possível criar essa barra.");
     else {
       setBarDrafts((current) => ({ ...current, [characterId]: { name: "", max: "10" } }));
       await load();
@@ -91,9 +96,7 @@ export default function ResourceBoard({ roomId, userId, role }: Props) {
     setError("");
     const { data, error: updateError } = await supabase.from("resource_bars")
       .update(patch).eq("id", bar.id).eq("updated_at", bar.updated_at).select("id").maybeSingle();
-    if (updateError || !data) {
-      setError(updateError ? "Não foi possível salvar a alteração." : "Esta barra mudou em outro dispositivo. Os dados foram atualizados.");
-    }
+    if (updateError || !data) setError(updateError ? "Não foi possível salvar a alteração." : "Esta barra mudou em outro dispositivo. Os dados foram atualizados.");
     await load();
     setBusy(null);
   }
@@ -109,29 +112,31 @@ export default function ResourceBoard({ roomId, userId, role }: Props) {
   if (loading) return <div className="board-state">Carregando personagens e recursos…</div>;
 
   return (
-    <section className="resource-board" aria-label="Barras de recursos dos personagens">
+    <section className="resource-board" aria-label="Personagens e recursos compartilhados">
       <div className="board-heading">
-        <div><p className="eyebrow">Recursos compartilhados</p><h2>Personagens <span>·</span> {characters.length}</h2></div>
+        <div><p className="eyebrow">Biblioteca compartilhada</p><h2>Personagens <span>·</span> {characters.length}</h2></div>
         <span className="sync-label"><i /> Sincronização ativa</span>
       </div>
       {error && <p className="board-error" role="alert">{error}</p>}
       <form className="character-create" onSubmit={addCharacter}>
-        <label htmlFor="new-character">Adicionar seu personagem à sala</label>
+        <label htmlFor="new-character">Adicionar personagem</label>
         <div className="inline-form">
           <input id="new-character" value={characterName} onChange={(event) => setCharacterName(event.target.value)} maxLength={80} placeholder="Nome do personagem" />
-          <button className="quiet-action" type="submit" disabled={busy === "character" || !characterName.trim()}>Adicionar personagem</button>
+          <button className="quiet-action" type="submit" disabled={busy === "character" || !characterName.trim()}>Adicionar</button>
         </div>
       </form>
-      {characters.length === 0 && <div className="board-empty"><span>—</span><strong>Ainda não há personagens nesta sala.</strong><p>Adicione seu personagem para começar a compartilhar recursos com o grupo.</p></div>}
+      {characters.length === 0 && <div className="board-empty"><span>—</span><strong>Ainda não há personagens.</strong><p>Os personagens criados aqui ficam disponíveis para todos os participantes com token válido.</p></div>}
       <div className="character-list">
         {characters.map((character) => {
-          const canManage = role === "gm" || character.owner_id === userId;
           const bars = [...(character.resource_bars ?? [])].sort((a, b) => a.sort_order - b.sort_order);
           return (
             <article className="character-card" key={character.id}>
               <div className="character-heading">
-                <div><p className="eyebrow">{character.owner_id === userId ? "Seu personagem" : "Personagem do grupo"}</p><h3>{character.name}</h3></div>
-                <span className="bar-count">{bars.length} recursos</span>
+                <div><p className="eyebrow">{character.owner_id === userId ? "Criado por você" : "Personagem compartilhado"}</p>
+                  <input className="character-name" aria-label="Nome do personagem" defaultValue={character.name} maxLength={80} disabled={busy === character.id}
+                    onBlur={(event) => { const value = event.currentTarget.value.trim(); if (value && value !== character.name) void renameCharacter(character, value); else event.currentTarget.value = character.name; }} />
+                </div>
+                <div className="character-tools"><span className="bar-count">{bars.length} recursos</span><button className="remove-character" type="button" disabled={busy === character.id} onClick={() => void deleteCharacter(character)}>Excluir</button></div>
               </div>
               {bars.length === 0 && <p className="no-bars">Nenhuma barra configurada.</p>}
               <div className="bars">
@@ -142,17 +147,17 @@ export default function ResourceBoard({ roomId, userId, role }: Props) {
                   return (
                     <div className="bar-row" key={bar.id}>
                       <div className="bar-topline">
-                        {canManage ? <input className="bar-name" aria-label="Nome do recurso" defaultValue={bar.name} maxLength={48} onBlur={(event) => {
+                        <input className="bar-name" aria-label="Nome do recurso" defaultValue={bar.name} maxLength={48} onBlur={(event) => {
                           const name = event.currentTarget.value.trim();
                           if (name && name !== bar.name) void updateBar(bar, { name });
                           else event.currentTarget.value = bar.name;
-                        }} /> : <span className="bar-name-static">{bar.name}</span>}
+                        }} />
                         <span className="bar-values">{current} <small>/</small> {maximum}</span>
                       </div>
                       <div className="bar-track" role="progressbar" aria-label={bar.name} aria-valuemin={0} aria-valuemax={maximum} aria-valuenow={current}>
                         <span className="bar-fill" style={{ width: percent + "%" }} />
                       </div>
-                      {canManage && <div className="bar-controls">
+                      <div className="bar-controls">
                         <button type="button" disabled={busy === bar.id || current <= 0} onClick={() => void updateBar(bar, { current_value: Math.max(0, current - 1) })} aria-label="Diminuir">−</button>
                         <input type="number" min={0} max={maximum} step="any" aria-label="Valor atual" defaultValue={current} onBlur={(event) => {
                           const next = Number(event.currentTarget.value);
@@ -168,21 +173,21 @@ export default function ResourceBoard({ roomId, userId, role }: Props) {
                           }} />
                         </label>
                         <button className="remove-bar" type="button" disabled={busy === bar.id} onClick={() => void deleteBar(bar.id)}>Excluir</button>
-                      </div>}
+                      </div>
                     </div>
                   );
                 })}
               </div>
-              {canManage && <form className="add-bar" onSubmit={(event) => { event.preventDefault(); void addBar(character.id); }}>
+              <form className="add-bar" onSubmit={(event) => { event.preventDefault(); void addBar(character.id); }}>
                 <input aria-label="Nome da nova barra" placeholder="Novo recurso" maxLength={48} value={(barDrafts[character.id] ?? { name: "", max: "10" }).name} onChange={(event) => setBarDrafts((current) => ({ ...current, [character.id]: { ...(current[character.id] ?? { name: "", max: "10" }), name: event.target.value } }))} />
                 <input aria-label="Valor máximo inicial" type="number" min={0} step="any" value={(barDrafts[character.id] ?? { name: "", max: "10" }).max} onChange={(event) => setBarDrafts((current) => ({ ...current, [character.id]: { ...(current[character.id] ?? { name: "", max: "10" }), max: event.target.value } }))} />
                 <button className="quiet-action" type="submit" disabled={busy === character.id}>Criar barra</button>
-              </form>}
+              </form>
             </article>
           );
         })}
       </div>
-      <p className="board-footnote">O banco verifica as permissões: o mestre pode editar todas as barras; cada jogador administra apenas os recursos dos próprios personagens.</p>
+      <p className="board-footnote">Todos os participantes com token válido podem criar, editar e excluir personagens e suas barras de recursos.</p>
     </section>
   );
 }
