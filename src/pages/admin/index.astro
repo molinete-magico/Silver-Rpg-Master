@@ -3,71 +3,110 @@ import SiteLayout from "../../layouts/SiteLayout.astro";
 const user = Astro.locals.user;
 if (!user || user.app_metadata.global_role !== "admin") return new Response("Acesso restrito.", { status: 403 });
 ---
-<SiteLayout title="Administração — Silver RPG Master">
+<SiteLayout title="Tokens de acesso — Silver RPG Master">
   <main class="page">
     <header class="header">
       <a class="brand" href="/salas"><span class="brand-mark">S.</span><span>SILVER <span class="muted">/</span> RPG MASTER</span></a>
-      <a class="back" href="/salas">Voltar às salas</a>
+      <a class="back" href="/salas">Voltar às sessões</a>
     </header>
     <section class="content">
       <p class="eyebrow">Administração global</p>
-      <h1>Convites<span>.</span></h1>
-      <p class="muted intro">Crie um código de uso único para permitir o cadastro de um novo participante. O código completo só será exibido uma vez.</p>
-      <form id="invite-form"><button class="button button-primary" type="submit">Gerar convite <span aria-hidden="true">→</span></button></form>
-      <div id="invite-result" class="result" hidden aria-live="polite"></div>
-      <p id="invite-error" class="error" hidden role="alert"></p>
+      <h1>Tokens de acesso<span>.</span></h1>
+      <p class="muted intro">Gere códigos reutilizáveis para seus amigos. Cada token pode ser usado por várias pessoas e continua válido até você revogá-lo. A revogação encerra o acesso de todas as sessões vinculadas àquele token.</p>
+      <form id="token-form">
+        <label for="label">Identificação (opcional)</label>
+        <input id="label" name="label" maxlength="80" placeholder="Ex.: Grupo principal" />
+        <button class="button button-primary" type="submit">Gerar token compartilhado <span aria-hidden="true">→</span></button>
+      </form>
+      <div id="token-result" class="result" hidden aria-live="polite"></div>
+      <p id="token-error" class="error" hidden role="alert"></p>
+      <div class="tokens-heading"><h2>Tokens emitidos</h2><button id="refresh" class="quiet" type="button">Atualizar</button></div>
+      <div id="token-list" class="token-list" aria-live="polite"><p class="muted">Carregando tokens…</p></div>
     </section>
   </main>
   <script>
-    const form = document.querySelector<HTMLFormElement>("#invite-form");
-    const result = document.querySelector<HTMLDivElement>("#invite-result");
-    const error = document.querySelector<HTMLParagraphElement>("#invite-error");
+    const form = document.querySelector<HTMLFormElement>("#token-form");
+    const result = document.querySelector<HTMLDivElement>("#token-result");
+    const error = document.querySelector<HTMLParagraphElement>("#token-error");
+    const list = document.querySelector<HTMLDivElement>("#token-list");
+    const refresh = document.querySelector<HTMLButtonElement>("#refresh");
+    async function loadTokens() {
+      if (!list) return;
+      const response = await fetch("/api/admin/tokens");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Falha ao carregar tokens.");
+      list.replaceChildren();
+      if (!payload.tokens?.length) {
+        const empty = document.createElement("p"); empty.className = "muted"; empty.textContent = "Nenhum token foi criado ainda."; list.append(empty); return;
+      }
+      for (const token of payload.tokens) {
+        const row = document.createElement("article"); row.className = "token-row";
+        const info = document.createElement("div");
+        const name = document.createElement("strong"); name.textContent = token.label;
+        const meta = document.createElement("small"); meta.textContent = new Date(token.created_at).toLocaleString("pt-BR") + (token.revoked_at ? " · Revogado" : " · Ativo");
+        info.append(name, meta); row.append(info);
+        if (token.revoked_at) {
+          const status = document.createElement("span"); status.className = "revoked"; status.textContent = "Revogado"; row.append(status);
+        } else {
+          const button = document.createElement("button"); button.className = "revoke"; button.type = "button"; button.textContent = "Revogar";
+          button.addEventListener("click", async () => {
+            if (!confirm("Revogar este token? Todas as sessões que o utilizam perderão o acesso.")) return;
+            button.disabled = true;
+            const response = await fetch("/api/admin/tokens/revoke", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: token.id }) });
+            if (!response.ok) { button.disabled = false; throw new Error("Não foi possível revogar o token."); }
+            await loadTokens();
+          });
+          row.append(button);
+        }
+        list.append(row);
+      }
+    }
     form?.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!form || !result || !error) return;
-      const button = form.querySelector("button");
-      if (button) button.disabled = true;
-      error.hidden = true;
+      const button = form.querySelector("button"); if (button) button.disabled = true;
+      error.hidden = true; result.hidden = true;
       try {
-        const response = await fetch("/api/admin/invitations", { method: "POST" });
+        const response = await fetch("/api/admin/tokens", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: new FormData(form).get("label") }) });
         const payload = await response.json();
-        if (!response.ok || !payload.code) throw new Error(payload.error ?? "Falha ao gerar convite.");
-        result.hidden = false;
+        if (!response.ok || !payload.code) throw new Error(payload.error ?? "Falha ao gerar token.");
         result.replaceChildren();
-        const label = document.createElement("p");
-        label.textContent = "Código criado. Copie e envie diretamente ao participante:";
-        const code = document.createElement("code");
-        code.textContent = payload.code;
-        const copy = document.createElement("button");
-        copy.type = "button";
-        copy.className = "button";
-        copy.textContent = "Copiar código";
-        copy.addEventListener("click", async () => {
-          await navigator.clipboard.writeText(payload.code);
-          copy.textContent = "Copiado";
-        });
-        result.append(label, code, copy);
-      } catch (cause) {
-        error.textContent = cause instanceof Error ? cause.message : "Falha ao gerar convite.";
-        error.hidden = false;
-      } finally {
-        if (button) button.disabled = false;
-      }
+        const label = document.createElement("p"); label.textContent = "Token criado. Ele será exibido somente agora; copie e guarde em local seguro.";
+        const code = document.createElement("code"); code.textContent = payload.code;
+        const copy = document.createElement("button"); copy.className = "button"; copy.type = "button"; copy.textContent = "Copiar token";
+        copy.addEventListener("click", async () => { await navigator.clipboard.writeText(payload.code); copy.textContent = "Copiado"; });
+        result.append(label, code, copy); result.hidden = false; form.reset(); await loadTokens();
+      } catch (cause) { error.textContent = cause instanceof Error ? cause.message : "Falha ao gerar token."; error.hidden = false; }
+      finally { if (button) button.disabled = false; }
     });
+    refresh?.addEventListener("click", () => void loadTokens().catch((cause) => { if (error) { error.textContent = cause.message; error.hidden = false; } }));
+    void loadTokens().catch((cause) => { if (list) list.textContent = cause.message; });
   </script>
 </SiteLayout>
 <style>
   .page { min-height: 100vh; width: min(100% - 48px, 1120px); margin: auto; }
   .header { height: 76px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
-  .back { color: var(--muted); font-size: 12px; }
-  .content { width: min(100%, 620px); margin: 82px auto; }
-  h1 { margin: 14px 0 12px; font: 700 clamp(42px, 7vw, 64px)/1 var(--display); letter-spacing: -.06em; }
+  .back,.quiet { color: var(--muted); font-size: 12px; }
+  .quiet { border: 0; background: none; cursor: pointer; }
+  .content { width: min(100%, 700px); margin: 72px auto; }
+  h1 { margin: 14px 0 12px; font: 700 clamp(38px, 7vw, 58px)/1 var(--display); letter-spacing: -.06em; }
   h1 span { color: var(--accent); }
-  .intro { max-width: 540px; font-size: 14px; line-height: 1.8; margin-bottom: 30px; }
+  .intro { max-width: 600px; font-size: 14px; line-height: 1.8; margin-bottom: 30px; }
+  form { display: grid; gap: 10px; }
+  label { margin-top: 8px; color: #b7c0b6; font-size: 12px; font-weight: 600; }
+  input { width: 100%; height: 44px; border: 1px solid var(--line); background: #171d18; color: var(--text); padding: 0 12px; }
+  form button { justify-self: start; margin-top: 10px; }
   .result { display: grid; gap: 13px; margin-top: 25px; padding: 20px; border: 1px solid var(--line); background: var(--surface); }
   .result p { margin: 0; color: var(--muted); font-size: 13px; }
   .result code { overflow-wrap: anywhere; padding: 13px; background: #101410; color: var(--accent-strong); font: 12px/1.7 var(--mono); }
   .result button { justify-self: start; }
-  .error { margin-top: 20px; color: var(--danger); font-size: 13px; }
-  button:disabled { opacity: .55; cursor: wait; }
+  .tokens-heading { display: flex; justify-content: space-between; align-items: baseline; margin-top: 60px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+  .tokens-heading h2 { margin: 0; font: 600 18px var(--display); }
+  .token-row { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 17px 0; border-bottom: 1px solid var(--line); }
+  .token-row strong,.token-row small { display: block; }
+  .token-row strong { font-size: 13px; }
+  .token-row small { margin-top: 5px; color: var(--muted); font-size: 11px; }
+  .revoke { border: 1px solid var(--line); background: transparent; color: var(--danger); padding: 8px 11px; font-size: 11px; cursor: pointer; }
+  .revoked { color: var(--danger); font: 11px var(--mono); }
+  .error { color: var(--danger); font-size: 12px; margin-top: 15px; }
 </style>
